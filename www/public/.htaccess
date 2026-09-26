@@ -1,0 +1,83 @@
+RewriteEngine On
+
+# Désactive MultiViews qui peut interférer avec les URLs sans extension réelle
+Options -MultiViews
+
+
+# -----------------------------------------------------------------------------
+# FICHIERS ET DOSSIERS EXISTANTS
+# -----------------------------------------------------------------------------
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [END]
+
+
+# -----------------------------------------------------------------------------
+# ACCUEIL
+# -----------------------------------------------------------------------------
+
+RewriteRule ^$ index.php?projects=index [QSA,END]
+RewriteRule ^projects/?$ index.php?projects=index [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# DETAIL D'UN PROJET
+# /projets/id/slug.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projets/([1-9][0-9]*)/([^/]+)\.html$ index.php?projects=show&id=$1 [QSA,END]
+
+# -----------------------------------------------------------------------------
+# DETAIL D'UN CREATIFS
+# /projets/id/slug.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^creatifs/([1-9][0-9]*)\.html$ index.php?projects=author&id=$1 [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# SUPPRESSION
+# /projets/delete/id/slug.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projets/delete/([1-9][0-9]*)/([^/]+)\.html$ index.php?projects=delete&id=$1 [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# AJOUT - FORMULAIRE
+# /projects/add/form.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projects/add/form\.html$ index.php?projects=add-form [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# AJOUT - INSERTION
+# /projects/add/insert.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projects/add/insert\.html$ index.php?projects=add-insert [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# MODIFICATION - FORMULAIRE
+# /projects/id/slug/edit/form.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projects/([1-9][0-9]*)/([^/]+)/edit/form\.html$ index.php?projects=edit-form&id=$1 [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# MODIFICATION - UPDATE
+# /projects/id/slug/edit/update.html
+# -----------------------------------------------------------------------------
+
+RewriteRule ^projects/([1-9][0-9]*)/([^/]+)/edit/update\.html$ index.php?projects=edit-update&id=$1 [QSA,END]
+
+
+# -----------------------------------------------------------------------------
+# FALLBACK
+# -----------------------------------------------------------------------------
+
+RewriteRule ^ index.php [END]

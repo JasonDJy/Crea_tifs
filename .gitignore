@@ -1,0 +1,6 @@
+# Configuration contenant des identifiants sensibles
+/www/app/config/params.php
+
+# Fichiers système
+.DS_Store
+
