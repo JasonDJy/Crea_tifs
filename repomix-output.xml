@@ -42,8 +42,6 @@ The content is organized as follows:
 <directory_structure>
 www/
   app/
-    config/
-      params.php
     controllers/
       pagesController.php
     models/
@@ -308,36 +306,31 @@ www/
         jquery.min.js
     .htaccess
     index.php
+.gitignore
+README.md
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
-
-<file path="www/app/config/params.php">
-<?php
-
-// Variables utilisées par le template principal.
-$title = "";
-$content = "Oups, il semble y avoir un problème.";
-
-
-// Paramètres de connexion à la base de données.
-define("DB_HOST", "localhost:3306");
-define("DB_NAME", "creatifs");
-define("DB_USER", "root");
-define("DB_PWD", "020678aA");
-</file>
 
 <file path="www/app/controllers/pagesController.php">
 <?php
 
 namespace App\Controllers\PagesController;
 
+// -----------------------------------------------------------------------------
+// Contrôleur "Pages" : contient toutes les actions appelées par les routeurs
+// (app/routers/*.php). Chaque fonction ci-dessous correspond à une page :
+// elle va chercher les données nécessaires via les modèles, puis les stocke
+// dans des variables globales qui seront lues par les vues (app/views/...).
+// -----------------------------------------------------------------------------
+
 use \PDO;
 use \App\Models\AuteursModel;
 use \App\Models\TagsModel;
 use \App\Models\ProjectsModel;
 
+// Chargement des modèles utilisés par les actions de ce contrôleur.
 include '../app/models/auteursModel.php';
 include '../app/models/tagsModel.php';
 include '../app/models/projectsModel.php';
@@ -353,15 +346,19 @@ include '../app/models/projectsModel.php';
 
 function dashboardAction(PDO $connexion)
 {
+    // Ces variables globales seront directement utilisées par le template
+    // et les partials (ex: _main.php, _pagination.php, _aside.php).
     global $auteurs, $tags, $projects, $page, $totalPages;
 
     // Récupère les créa'tifs et les tags pour l'affichage dans la sidebar.
     $auteurs = AuteursModel\getAuthors($connexion);
     $tags = TagsModel\getTags($connexion);
 
-    // Récupère le numéro de page.
+    // Récupère le numéro de page demandé dans l'URL (ex: ?page=2), 1 par défaut.
     $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
 
+    // Garde-fou : on ne descend jamais en dessous de la page 1
+    // (évite un LIMIT/OFFSET négatif si l'utilisateur bidouille l'URL).
     if ($page < 1) {
         $page = 1;
     }
@@ -375,6 +372,8 @@ function dashboardAction(PDO $connexion)
 
     if (isset($_GET['tag'])) {
 
+        // Un tag est sélectionné (lien "?tag=..." cliqué dans la sidebar) :
+        // on ne récupère que les projets liés à ce tag, page par page.
         $tagId = (int) $_GET['tag'];
 
         $projects = TagsModel\getProjectsByTag(
@@ -383,6 +382,7 @@ function dashboardAction(PDO $connexion)
             $page
         );
 
+        // Nécessaire pour calculer le nombre de pages de CE filtre précis.
         $totalProjects = TagsModel\countProjectsByTag(
             $connexion,
             $tagId
@@ -396,6 +396,8 @@ function dashboardAction(PDO $connexion)
     |--------------------------------------------------------------------------
     */ else {
 
+        // Aucun filtre : comportement par défaut de la page d'accueil,
+        // on récupère tous les projets (10 par page).
         $projects = ProjectsModel\getProjects(
             $connexion,
             $page
@@ -407,7 +409,8 @@ function dashboardAction(PDO $connexion)
     }
 
 
-    // Calcule le nombre total de pages.
+    // Calcule le nombre total de pages en fonction du nombre de projets
+    // trouvé ci-dessus et de la limite fixe de 10 projets par page.
     $totalPages = ceil($totalProjects / 10);
 }
 
@@ -423,11 +426,14 @@ function projectAction(PDO $connexion, int $id)
 {
     global $project, $tagsProjet, $projetIntrouvable;
 
+    // Recherche le projet demandé (avec les infos du créa'tif associé).
     $project = ProjectsModel\getProjectById(
         $connexion,
         $id
     );
 
+    // Si l'id ne correspond à aucun projet, on prévient la vue
+    // (elle affichera un message "Projet introuvable") et on arrête ici.
     if ($project === false) {
 
         $projetIntrouvable = true;
@@ -437,6 +443,7 @@ function projectAction(PDO $connexion, int $id)
 
     $projetIntrouvable = false;
 
+    // Récupère les tags associés à ce projet, pour les afficher sous la description.
     $tagsProjet = ProjectsModel\getProjectTags(
         $connexion,
         $id
@@ -454,11 +461,13 @@ function authorAction(PDO $connexion, int $id)
 {
     global $auteur, $projetsAuteur, $auteurIntrouvable;
 
+    // Recherche le créa'tif demandé par son id.
     $auteur = AuteursModel\getAuthorById(
         $connexion,
         $id
     );
 
+    // Créa'tif inexistant : on le signale à la vue et on s'arrête.
     if ($auteur === false) {
 
         $auteurIntrouvable = true;
@@ -468,6 +477,7 @@ function authorAction(PDO $connexion, int $id)
 
     $auteurIntrouvable = false;
 
+    // Récupère tous les projets réalisés par ce créa'tif, pour les lister sur sa page.
     $projetsAuteur = AuteursModel\getProjectsByAuthor(
         $connexion,
         $id
@@ -479,6 +489,10 @@ function authorAction(PDO $connexion, int $id)
 |--------------------------------------------------------------------------
 | Affiche les projets d'un tag
 |--------------------------------------------------------------------------
+| Remarque : cette action n'est actuellement appelée par aucun routeur
+| (le filtrage par tag de la page d'accueil est géré directement dans
+| dashboardAction() via $_GET['tag']). Elle est conservée ici au cas où
+| une route dédiée /tags/id.html serait ajoutée plus tard.
 */
 
 function tagAction(PDO $connexion, int $id)
@@ -487,6 +501,8 @@ function tagAction(PDO $connexion, int $id)
 
     $tag = null;
 
+    // Récupère tous les tags puis cherche celui dont l'id correspond,
+    // faute d'une fonction getTagById() dédiée dans le modèle.
     $tags = TagsModel\getTags($connexion);
 
     foreach ($tags as $element) {
@@ -499,6 +515,7 @@ function tagAction(PDO $connexion, int $id)
         }
     }
 
+    // Tag inexistant : on le signale à la vue et on s'arrête.
     if ($tag === null) {
 
         $tagIntrouvable = true;
@@ -508,6 +525,7 @@ function tagAction(PDO $connexion, int $id)
 
     $tagIntrouvable = false;
 
+    // Récupère les projets associés à ce tag.
     $projetsTag = TagsModel\getProjectsByTag(
         $connexion,
         $id
@@ -525,32 +543,42 @@ function nouveauProjetAction(PDO $connexion)
 {
     global $auteurs, $tags, $nouveauProjet;
 
+    // Nécessaires pour remplir les listes déroulantes/cases à cocher du formulaire.
     $auteurs = AuteursModel\getAuthors($connexion);
     $tags = TagsModel\getTags($connexion);
 
+    // Indique à _main.php qu'il faut afficher le formulaire d'ajout (nouveauProjet.php).
     $nouveauProjet = true;
 
+    // Cette même action gère 2 routes : affichage du formulaire (GET)
+    // et traitement de l'envoi (POST). On ne traite l'insertion qu'en POST.
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
+        // Récupère les champs du formulaire (valeur par défaut si absents).
         $titre = $_POST['title'] ?? '';
         $texte = $_POST['text'] ?? '';
         $creatif = (int) ($_POST['category_id'] ?? 0);
 
+        // Validation minimale : les champs obligatoires doivent être renseignés.
+        // Si ce n'est pas le cas, on arrête là : le formulaire sera réaffiché.
         if ($titre === '' || $texte === '' || $creatif === 0) {
             return;
         }
 
         $image = null;
 
+        // Gestion de l'upload de l'image (optionnelle).
         if (
             isset($_FILES['image']) &&
             $_FILES['image']['error'] === 0
         ) {
 
+            // basename() évite tout chemin malicieux dans le nom de fichier envoyé.
             $nomImage = basename($_FILES['image']['name']);
 
             $destination = '../public/images/' . $nomImage;
 
+            // Déplace le fichier temporaire uploadé vers le dossier public/images.
             move_uploaded_file(
                 $_FILES['image']['tmp_name'],
                 $destination
@@ -559,6 +587,7 @@ function nouveauProjetAction(PDO $connexion)
             $image = $nomImage;
         }
 
+        // Insère le nouveau projet en base et récupère son id généré.
         $projectId = ProjectsModel\createProject(
             $connexion,
             $titre,
@@ -567,6 +596,7 @@ function nouveauProjetAction(PDO $connexion)
             $image
         );
 
+        // Si des tags ont été cochés, on crée les associations projet <-> tag.
         if (isset($_POST['tags']) && is_array($_POST['tags'])) {
 
             foreach ($_POST['tags'] as $tagId) {
@@ -599,27 +629,35 @@ function modifierProjetAction(PDO $connexion, int $id)
 {
     global $auteurs, $tags, $projetAModifier, $tagsProjet;
 
+    // Nécessaires pour remplir les listes déroulantes/cases à cocher du formulaire.
     $auteurs = AuteursModel\getAuthors($connexion);
     $tags = TagsModel\getTags($connexion);
 
+    // Charge le projet à modifier, pour pré-remplir le formulaire
+    // (que la requête soit en GET pour l'afficher, ou en POST pour le traiter).
     $projetAModifier = ProjectsModel\getProjectById(
         $connexion,
         $id
     );
 
+    // Tags déjà associés au projet, pour cocher les bonnes cases dans le formulaire.
     $tagsProjet = ProjectsModel\getProjectTags(
         $connexion,
         $id
     );
 
+    // Cette même action gère 2 routes : affichage du formulaire pré-rempli (GET)
+    // et traitement de la modification (POST).
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $titre = $_POST['title'];
         $texte = $_POST['text'];
         $creatif = (int) $_POST['category_id'];
 
+        // Par défaut, on garde l'image existante si aucune nouvelle n'est envoyée.
         $image = $projetAModifier['image'];
 
+        // Si un nouveau fichier a été envoyé, il remplace l'image actuelle.
         if (
             isset($_FILES['image']) &&
             $_FILES['image']['error'] === 0
@@ -637,6 +675,7 @@ function modifierProjetAction(PDO $connexion, int $id)
             $image = $nomImage;
         }
 
+        // Met à jour le projet en base avec les nouvelles valeurs.
         ProjectsModel\updateProject(
             $connexion,
             $id,
@@ -646,6 +685,8 @@ function modifierProjetAction(PDO $connexion, int $id)
             $image
         );
 
+        // On repart d'une association de tags "propre" : on supprime les
+        // anciennes associations avant de recréer celles cochées dans le formulaire.
         ProjectsModel\deleteProjectTags(
             $connexion,
             $id
@@ -679,6 +720,7 @@ function modifierProjetAction(PDO $connexion, int $id)
 
 function supprimerProjetAction(PDO $connexion, int $id)
 {
+    // Supprime le projet (et ses associations de tags, gérées dans le modèle).
     ProjectsModel\deleteProject(
         $connexion,
         $id
@@ -699,6 +741,10 @@ function supprimerProjetAction(PDO $connexion, int $id)
 
 namespace App\Models\AuteursModel;
 
+// -----------------------------------------------------------------------------
+// Modèle "Créa'tifs" (auteurs) : requêtes SQL liées à la table `creatifs`.
+// -----------------------------------------------------------------------------
+
 use \PDO;
 
 
@@ -710,6 +756,8 @@ use \PDO;
 
 function getAuthors(PDO $connexion)
 {
+    // Utilisé notamment pour afficher la liste des créa'tifs dans la sidebar
+    // et pour remplir le <select> des formulaires d'ajout/modification.
     $sql = "SELECT * FROM creatifs";
 
     $stmt = $connexion->prepare($sql);
@@ -737,6 +785,7 @@ function getAuthorById(PDO $connexion, int $id)
         'id' => $id
     ]);
 
+    // fetch() renvoie une seule ligne (ou false si l'id n'existe pas).
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
@@ -749,6 +798,8 @@ function getAuthorById(PDO $connexion, int $id)
 
 function getProjectsByAuthor(PDO $connexion, int $authorId, int $page = 1)
 {
+    // Même logique de pagination que ProjectsModel\getProjects(),
+    // mais restreinte aux projets d'un seul créa'tif.
     $limit = 10;
     $offset = ($page - 1) * $limit;
 
@@ -778,6 +829,8 @@ function getProjectsByAuthor(PDO $connexion, int $authorId, int $page = 1)
 
 function countProjectsByAuthor(PDO $connexion, int $authorId)
 {
+    // Compte les projets d'un créa'tif donné (pour une éventuelle pagination
+    // de sa page de profil).
     $sql = "SELECT COUNT(*)
             FROM projets
             WHERE creatif = :author";
@@ -797,6 +850,13 @@ function countProjectsByAuthor(PDO $connexion, int $authorId)
 
 namespace App\Models\ProjectsModel;
 
+// -----------------------------------------------------------------------------
+// Modèle "Projets" : toutes les requêtes SQL liées à la table `projets`
+// (et à la table de liaison `projets_has_tags`) sont centralisées ici.
+// Les contrôleurs ne parlent jamais directement à la base de données :
+// ils passent systématiquement par ces fonctions.
+// -----------------------------------------------------------------------------
+
 use \PDO;
 
 
@@ -809,9 +869,16 @@ use \PDO;
 
 function getProjects(PDO $connexion, int $page = 1)
 {
+    // 10 projets par page (imposé par les consignes) ; l'offset détermine
+    // à partir de quelle ligne on commence à lire selon la page demandée.
     $limit = 10;
     $offset = ($page - 1) * $limit;
 
+    // INNER JOIN sur creatifs pour récupérer le pseudo de l'auteur
+    // en une seule requête (évite une requête supplémentaire par projet).
+    // $limit/$offset sont injectés directement dans la chaîne (et non liés en
+    // paramètre) car PDO ne permet pas de binder LIMIT/OFFSET nativement ;
+    // ils restent sûrs ici car typés en int dès la signature de la fonction.
     $sql = "SELECT projets.*, creatifs.pseudo
             FROM projets
             INNER JOIN creatifs
@@ -835,6 +902,8 @@ function getProjects(PDO $connexion, int $page = 1)
 
 function countProjects(PDO $connexion)
 {
+    // Compte tous les projets, sans pagination, pour connaître le total
+    // et pouvoir en déduire le nombre de pages dans le contrôleur.
     $sql = "SELECT COUNT(*)
             FROM projets";
 
@@ -854,6 +923,9 @@ function countProjects(PDO $connexion)
 
 function getProjectById(PDO $connexion, int $id)
 {
+    // Les colonnes du créa'tif sont renommées (AS creatif_image, AS creatif_bio)
+    // pour ne pas entrer en conflit avec les colonnes de la table projets
+    // et pour être facilement exploitables dans la vue de détail.
     $sql = "SELECT projets.*,
                    creatifs.pseudo,
                    creatifs.image AS creatif_image,
@@ -865,10 +937,14 @@ function getProjectById(PDO $connexion, int $id)
 
     $stmt = $connexion->prepare($sql);
 
+    // Requête préparée : la valeur de $id est liée en paramètre, pas concaténée
+    // dans le SQL, ce qui protège contre les injections SQL.
     $stmt->execute([
         'id' => $id
     ]);
 
+    // fetch() (et non fetchAll()) car on attend au maximum une seule ligne.
+    // Renvoie `false` si aucun projet ne correspond à cet id.
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
 
@@ -888,6 +964,7 @@ function createProject(
     int $creatif,
     ?string $image
 ) {
+    // NOW() : la date de création est générée côté MySQL, pas en PHP.
     $sql = "INSERT INTO projets
             (titre, texte, dateCreation, image, creatif)
             VALUES
@@ -902,6 +979,8 @@ function createProject(
         'creatif' => $creatif
     ]);
 
+    // lastInsertId() renvoie l'id auto-incrémenté généré pour ce nouveau projet,
+    // utile ensuite pour lui associer ses tags.
     return $connexion->lastInsertId();
 }
 
@@ -978,6 +1057,8 @@ function deleteProjectTags(
     PDO $connexion,
     int $projectId
 ) {
+    // Ne supprime que les lignes de la table de liaison (les tags eux-mêmes
+    // et le projet restent intacts) — sert de "reset" avant une modification.
     $sql = "DELETE FROM projets_has_tags
             WHERE projet = :projet";
 
@@ -1000,6 +1081,8 @@ function getProjectTags(
     PDO $connexion,
     int $projectId
 ) {
+    // Passe par la table de liaison projets_has_tags pour ne récupérer
+    // que les tags réellement associés à ce projet précis.
     $sql = "SELECT tags.*
             FROM tags
             INNER JOIN projets_has_tags
@@ -1056,6 +1139,11 @@ function deleteProject(
 
 namespace App\Models\TagsModel;
 
+// -----------------------------------------------------------------------------
+// Modèle "Tags" : requêtes SQL liées à la table `tags` et au filtrage
+// des projets par tag (via la table de liaison `projets_has_tags`).
+// -----------------------------------------------------------------------------
+
 use \PDO;
 
 
@@ -1067,6 +1155,8 @@ use \PDO;
 
 function getTags(PDO $connexion)
 {
+    // Liste complète des tags, utilisée dans la sidebar (filtre) et
+    // dans les formulaires d'ajout/modification (cases à cocher).
     $sql = "SELECT * FROM tags";
 
     $stmt = $connexion->prepare($sql);
@@ -1084,6 +1174,9 @@ function getTags(PDO $connexion)
 
 function getProjectsByTag(PDO $connexion, int $tagId, int $page = 1)
 {
+    // Même logique de pagination que ProjectsModel\getProjects(),
+    // mais restreinte aux projets liés à un tag précis (double INNER JOIN :
+    // un pour récupérer le pseudo du créa'tif, un pour filtrer par tag).
     $limit = 10;
     $offset = ($page - 1) * $limit;
 
@@ -1115,6 +1208,8 @@ function getProjectsByTag(PDO $connexion, int $tagId, int $page = 1)
 
 function countProjectsByTag(PDO $connexion, int $tagId)
 {
+    // Compte directement dans la table de liaison : un projet compte une fois
+    // par tag auquel il est associé (pas besoin de rejoindre `projets` ici).
     $sql = "SELECT COUNT(*)
             FROM projets_has_tags
             WHERE tag = :tag";
@@ -1146,16 +1241,22 @@ include_once '../app/controllers/pagesController.php';
 
 function routeAuthors(PDO $connexion): bool
 {
+    // Le .htaccess transforme /creatifs/id.html en index.php?projects=author&id=...
+    // (la valeur 'author' du paramètre "projects" est donc réservée à cette route).
     if (isset($_GET['projects']) && $_GET['projects'] === 'author') {
 
+        // On délègue l'affichage au contrôleur, en castant l'id en entier
+        // (sécurité minimale : on force un type numérique avant la requête SQL).
         \App\Controllers\PagesController\authorAction(
             $connexion,
             (int) $_GET['id']
         );
 
+        // La route a été reconnue et traitée : on le signale au dispatcher.
         return true;
     }
 
+    // Cette route ne correspond pas à la requête actuelle.
     return false;
 }
 </file>
@@ -1169,10 +1270,15 @@ function routeAuthors(PDO $connexion): bool
 // (un par ressource), chacun renvoyant true s'il a pris en charge la requête.
 // -----------------------------------------------------------------------------
 
+// Charge les fonctions routeAuthors() et routeProjects() définies plus bas.
 include_once '../app/routers/authorsRouter.php';
 include_once '../app/routers/projectsRouter.php';
 
+// $connexion vient de core/connexion.php (chargé par core/init.php) ;
+// on le transmet à chaque routeur pour qu'il puisse interroger la BDD.
+
 // On teste d'abord la route "créa'tif" (valeur dédiée de $_GET['projects']).
+// Si elle correspond, le contrôleur a déjà été exécuté : on arrête ici.
 if (routeAuthors($connexion)) {
     return;
 }
@@ -1207,6 +1313,8 @@ function routeProjects(PDO $connexion): bool
         return true;
     }
 
+    // La valeur de $_GET['projects'] (fixée par le .htaccess selon l'URL demandée)
+    // détermine quelle action du contrôleur doit être appelée.
     switch ($_GET['projects']) {
 
         // ACCUEIL : /projects
@@ -1250,12 +1358,18 @@ function routeProjects(PDO $connexion): bool
             return true;
     }
 
+    // Aucun des cas ci-dessus ne correspond : la route est inconnue.
     return false;
 }
 </file>
 
 <file path="www/app/views/pages/auteurs.php">
 <?php
+
+// -----------------------------------------------------------------------------
+// Vue "Page d'un créa'tif" (route /creatifs/id.html, gérée par authorAction()).
+// Affiche sa fiche ($auteur) et la liste de tous ses projets ($projetsAuteur).
+// -----------------------------------------------------------------------------
 
 /** @var array $auteur */
 /** @var array $projetsAuteur */
@@ -1293,7 +1407,7 @@ function routeProjects(PDO $connexion): bool
         </div>
 
 
-        <!-- Liste des projets du créa'tif. -->
+        <!-- Liste des projets du créa'tif (même style de "carte" que la page d'accueil). -->
         <div class="col-lg-8">
 
             <h1>
@@ -1326,6 +1440,7 @@ function routeProjects(PDO $connexion): bool
                                 <?= $project['titre'] ?>
                             </h3>
 
+                            <!-- Aperçu tronqué à 100 caractères, comme sur la page d'accueil. -->
                             <p>
                                 <?= truncate($project['texte'], 100) ?>
                             </p>
@@ -1356,6 +1471,13 @@ function routeProjects(PDO $connexion): bool
 <file path="www/app/views/pages/modifierProjet.php">
 <?php
 
+// -----------------------------------------------------------------------------
+// Vue "Modifier un projet" (routes .../edit/form.html et .../edit/update.html,
+// toutes deux gérées par modifierProjetAction()). Même formulaire que l'ajout,
+// mais pré-rempli avec les valeurs actuelles du projet ($projetAModifier)
+// et avec les cases à cocher des tags déjà associés ($tagsProjet) cochées.
+// -----------------------------------------------------------------------------
+
 /** @var array $projetAModifier */
 /** @var array $auteurs */
 /** @var array $tags */
@@ -1374,6 +1496,7 @@ function routeProjects(PDO $connexion): bool
                 Modifier le projet
             </h1>
 
+            <!-- L'action pointe vers la route "update.html" du projet en cours. -->
             <form
                 action="projects/<?= $projetAModifier['id'] ?>/<?= slugify($projetAModifier['titre']) ?>/edit/update.html"
                 method="post"
@@ -1385,6 +1508,7 @@ function routeProjects(PDO $connexion): bool
                     Titre du projet
                 </label>
 
+                <!-- value pré-rempli avec le titre actuel du projet. -->
                 <input
                     type="text"
                     name="title"
@@ -1397,6 +1521,7 @@ function routeProjects(PDO $connexion): bool
                     Description
                 </label>
 
+                <!-- Contenu actuel du textarea = texte actuel du projet. -->
                 <textarea
                     id="text"
                     name="text"
@@ -1408,6 +1533,8 @@ function routeProjects(PDO $connexion): bool
                     Photo du résultat
                 </label>
 
+                <!-- Champ facultatif : si aucun fichier n'est choisi,
+                     l'image actuelle est conservée (voir modifierProjetAction()). -->
                 <div class="ct-dropzone">
 
                     ✂️ Choisissez une nouvelle image si vous souhaitez la remplacer
@@ -1425,6 +1552,7 @@ function routeProjects(PDO $connexion): bool
                     Créa'tif
                 </label>
 
+                <!-- Le créa'tif actuellement associé au projet est présélectionné. -->
                 <select
                     id="category"
                     name="category_id"
@@ -1452,6 +1580,8 @@ function routeProjects(PDO $connexion): bool
                     </span>
                 </label>
 
+                <!-- Les tags déjà liés au projet ($tagsProjet) sont pré-cochés :
+                     on vérifie leur présence dans array_column($tagsProjet, 'id'). -->
                 <div class="ct-tag-choice">
 
                     <?php foreach ($tags as $tag): ?>
@@ -1484,7 +1614,7 @@ function routeProjects(PDO $connexion): bool
                         type="submit"
                         value="Enregistrer">
 
-                    <!-- Annuler -->
+                    <!-- Annuler : simple lien retour vers le détail du projet (pas de POST). -->
                     <a
                         href="projets/<?= $projetAModifier['id'] ?>/<?= slugify($projetAModifier['titre']) ?>.html"
                         class="ct-btn ct-btn--ghost">
@@ -1517,6 +1647,12 @@ function routeProjects(PDO $connexion): bool
 <file path="www/app/views/pages/nouveauProjet.php">
 <?php
 
+// -----------------------------------------------------------------------------
+// Vue "Ajouter un projet" (routes /projects/add/form.html et /projects/add/insert.html,
+// toutes deux gérées par nouveauProjetAction()). $auteurs et $tags servent
+// à remplir le <select> et les cases à cocher du formulaire.
+// -----------------------------------------------------------------------------
+
 /** @var array $auteurs */
 /** @var array $tags */
 
@@ -1533,6 +1669,8 @@ function routeProjects(PDO $connexion): bool
                 Ajouter un projet
             </h1>
 
+            <!-- L'action pointe vers la route "insert.html" ; enctype
+                 multipart obligatoire car le formulaire envoie un fichier (image). -->
             <form
                 action="projects/add/insert.html"
                 method="post"
@@ -1584,6 +1722,7 @@ function routeProjects(PDO $connexion): bool
                     Créa'tif
                 </label>
 
+                <!-- Liste déroulante générée dynamiquement depuis $auteurs. -->
                 <select
                     id="category"
                     name="category_id"
@@ -1611,6 +1750,8 @@ function routeProjects(PDO $connexion): bool
                     </span>
                 </label>
 
+                <!-- Cases à cocher générées depuis $tags ; envoyées comme
+                     tableau "tags[]" et lues côté contrôleur via $_POST['tags']. -->
                 <div class="ct-tag-choice">
 
                     <?php foreach ($tags as $tag): ?>
@@ -1650,7 +1791,8 @@ function routeProjects(PDO $connexion): bool
         </div>
 
 
-        <!-- Sidebar avec les créa'tifs et les tags. -->
+        <!-- Sidebar avec les créa'tifs et les tags (réutilise les mêmes partials
+             que la page d'accueil, d'où le découpage en _auteurs.php / _tags.php). -->
         <div class="col-lg-4 py-3">
 
             <?php require_once '../app/views/templates/partials/_auteurs.php'; ?>
@@ -1666,6 +1808,12 @@ function routeProjects(PDO $connexion): bool
 
 <file path="www/app/views/pages/projets.php">
 <?php
+
+// -----------------------------------------------------------------------------
+// Vue "détail d'un projet" (route /projets/id/slug.html).
+// Reçoit $project (le projet + les infos du créa'tif via l'INNER JOIN
+// du modèle) et $tagsProjet (les tags associés), préparés par projectAction().
+// -----------------------------------------------------------------------------
 
 /** @var array $project */
 /** @var array $tagsProjet */
@@ -1698,7 +1846,7 @@ function routeProjects(PDO $connexion): bool
 
             <div class="mb-4">
 
-                <!-- Modifier le projet -->
+                <!-- Modifier le projet : route /projects/id/slug/edit/form.html -->
                 <a
                     href="projects/<?= $project['id'] ?>/<?= slugify($project['titre']) ?>/edit/form.html"
                     class="ct-btn ct-btn--primary">
@@ -1708,7 +1856,8 @@ function routeProjects(PDO $connexion): bool
                 </a>
 
 
-                <!-- Supprimer le projet -->
+                <!-- Supprimer le projet : route /projets/delete/id/slug.html.
+                     confirm() JS demande une confirmation avant d'envoyer le lien. -->
                 <a
                     href="projets/delete/<?= $project['id'] ?>/<?= slugify($project['titre']) ?>.html"
                     class="ct-btn ct-btn--danger"
@@ -1744,7 +1893,7 @@ function routeProjects(PDO $connexion): bool
                         </p>
 
 
-                        <!-- Tags -->
+                        <!-- Tags : affichés uniquement si le projet en a au moins un. -->
                         <?php if (!empty($tagsProjet)): ?>
 
                             <div class="mt-4">
@@ -1786,7 +1935,7 @@ function routeProjects(PDO $connexion): bool
         </div>
 
 
-        <!-- Colonne latérale -->
+        <!-- Colonne latérale : mini fiche du créa'tif de ce projet. -->
         <div class="col-lg-4">
 
             <div class="ct-side-card">
@@ -1836,6 +1985,10 @@ function routeProjects(PDO $connexion): bool
 </file>
 
 <file path="www/app/views/templates/partials/_aside.php">
+<!--
+    Colonne latérale (sidebar) de la page d'accueil : regroupe elle-même
+    deux partials, un par bloc de contenu, pour rester simple à maintenir.
+-->
 <div class="col-lg-4">
 
     <!-- Liste des créa'tifs avec accès à leur page. -->
@@ -1849,6 +2002,9 @@ function routeProjects(PDO $connexion): bool
 
 <file path="www/app/views/templates/partials/_auteurs.php">
 <?php
+
+// $auteurs vient de dashboardAction() (défini pour toutes les pages
+// utilisant _aside.php) : tableau de tous les créa'tifs.
 
 /** @var array $auteurs */
 
@@ -1864,6 +2020,7 @@ function routeProjects(PDO $connexion): bool
 
     <ul class="ct-creatif-list">
 
+      <!-- Une ligne "avatar + pseudo" par créa'tif, menant à sa page dédiée. -->
       <?php foreach ($auteurs as $auteur): ?>
 
         <li>
@@ -1889,7 +2046,7 @@ function routeProjects(PDO $connexion): bool
 </file>
 
 <file path="www/app/views/templates/partials/_footer.php">
-<!-- Pied de page commun à toutes les pages. -->
+<!-- Pied de page commun à toutes les pages, purement statique. -->
 <footer class="py-5 ct-footer">
   <div class="container">
     <p class="m-0 text-center text-white">
@@ -1900,7 +2057,10 @@ function routeProjects(PDO $connexion): bool
 </file>
 
 <file path="www/app/views/templates/partials/_head.php">
+<!-- Partial inclus dans le <head> du template default.php : métadonnées et CSS. -->
 <head>
+  <!-- <base> permet d'utiliser des chemins relatifs (images/..., css/...) partout
+       dans les vues, quelle que soit l'URL "propre" affichée dans le navigateur. -->
   <base href="<?= PUBLIC_BASE_URL ?>">
   <meta charset="utf-8" />
   <meta
@@ -1918,14 +2078,19 @@ function routeProjects(PDO $connexion): bool
   <link href="<?= PUBLIC_BASE_URL ?>css/creatifs.css" rel="stylesheet" />
 </head>
 
-<!-- Bootstrap JavaScript -->
+<!-- Bootstrap JavaScript (jQuery requis par le bundle Bootstrap) -->
 <script src="<?= PUBLIC_BASE_URL ?>vendor/jquery/jquery.min.js"></script>
 <script src="<?= PUBLIC_BASE_URL ?>vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 </file>
 
 <file path="www/app/views/templates/partials/_header.php">
-<!-- En-tête visuel affiché sur les différentes pages du site. -->
+<!--
+    En-tête visuel (bandeau "hero") affiché sur toutes les pages.
+    Purement statique : titre et texte d'accroche fixes, plus deux
+    icônes décoratives en SVG (des "étincelles"). Aucune donnée PHP.
+-->
 <header class="ct-hero">
+      <!-- Icônes décoratives -->
       <svg class="ct-spark" style="width:34px;top:24px;left:12%" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z"></path></svg>
       <svg class="ct-spark" style="width:22px;bottom:28px;left:30%" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z"></path></svg>
       <div class="container">
@@ -1938,6 +2103,16 @@ function routeProjects(PDO $connexion): bool
 <file path="www/app/views/templates/partials/_main.php">
 <?php
 
+// -----------------------------------------------------------------------------
+// Partial "central" du template : c'est ce fichier qui décide QUELLE vue
+// afficher, en fonction des variables globales définies par le contrôleur
+// (voir app/controllers/pagesController.php). Chaque bloc ci-dessous
+// correspond à un cas possible, testé dans l'ordre, avec un `return`
+// pour arrêter le fichier dès qu'un cas correspond.
+// Si aucun cas particulier ne correspond, le code par défaut plus bas
+// affiche la liste des projets (page d'accueil).
+// -----------------------------------------------------------------------------
+
 /** @var array $projects */
 /** @var array $project */
 
@@ -1946,6 +2121,7 @@ function routeProjects(PDO $connexion): bool
 |--------------------------------------------------------------------------
 | AJOUT D'UN PROJET
 |--------------------------------------------------------------------------
+| $nouveauProjet est mis à `true` par nouveauProjetAction().
 */
 
 if (isset($nouveauProjet)) {
@@ -1960,6 +2136,7 @@ if (isset($nouveauProjet)) {
 |--------------------------------------------------------------------------
 | MODIFICATION D'UN PROJET
 |--------------------------------------------------------------------------
+| $projetAModifier est défini par modifierProjetAction() (le projet à éditer).
 */
 
 if (isset($projetAModifier)) {
@@ -1974,6 +2151,8 @@ if (isset($projetAModifier)) {
 |--------------------------------------------------------------------------
 | PROJET INTROUVABLE
 |--------------------------------------------------------------------------
+| $projetIntrouvable passe à true si projectAction() n'a pas trouvé
+| de projet correspondant à l'id demandé dans l'URL.
 */
 
 if (!empty($projetIntrouvable)) {
@@ -1991,6 +2170,8 @@ if (!empty($projetIntrouvable)) {
 |--------------------------------------------------------------------------
 | AUTEUR INTROUVABLE
 |--------------------------------------------------------------------------
+| Même logique que ci-dessus, mais pour un créa'tif introuvable
+| (défini par authorAction()).
 */
 
 
@@ -2010,6 +2191,8 @@ if (!empty($auteurIntrouvable)) {
 |--------------------------------------------------------------------------
 | PAGE AUTEUR
 |--------------------------------------------------------------------------
+| $auteur est défini par authorAction() : affiche la fiche du créa'tif
+| et la liste de ses projets.
 */
 
 if (isset($auteur)) {
@@ -2024,6 +2207,7 @@ if (isset($auteur)) {
 |--------------------------------------------------------------------------
 | DETAIL D'UN PROJET
 |--------------------------------------------------------------------------
+| $project est défini par projectAction() : affiche le détail d'un projet.
 */
 
 if (isset($project)) {
@@ -2035,12 +2219,19 @@ if (isset($project)) {
 
 ?>
 
+<!--
+    CAS PAR DÉFAUT : aucune des conditions ci-dessus n'a matché,
+    on est donc sur la page d'accueil (liste paginée des projets),
+    éventuellement filtrée par tag (variable $projects préparée
+    par dashboardAction() dans les deux cas).
+-->
 <div class="container ct-content-wrap">
 
   <div class="row">
 
     <div class="col-lg-8">
 
+      <!-- Une "carte" par projet de la page courante -->
       <?php foreach ($projects as $project): ?>
 
         <article class="ct-card">
@@ -2049,6 +2240,8 @@ if (isset($project)) {
 
             <div class="col-md-4">
 
+              <!-- Vignette du projet, cliquable, menant à son détail. -->
+              <!-- Le slug est recalculé à la volée avec slugify() (pas stocké en BDD). -->
               <a href="projets/<?= $project['id'] ?>/<?= slugify($project['titre']) ?>.html">
 
                 <img
@@ -2068,6 +2261,7 @@ if (isset($project)) {
                 </a>
               </h3>
 
+              <!-- Auteur + date de création formatée en jj/mm/aaaa. -->
               <p class="ct-byline">
                 par
                 <a href="creatifs/<?= $project['creatif'] ?>.html">
@@ -2076,6 +2270,7 @@ if (isset($project)) {
                 · <?= date('d/m/Y', strtotime($project['dateCreation'])) ?>
               </p>
 
+              <!-- Aperçu du texte tronqué à 100 caractères (consigne de l'énoncé). -->
               <p>
                 <?= truncate($project['texte'], 100) ?>
               </p>
@@ -2094,10 +2289,12 @@ if (isset($project)) {
 
       <?php endforeach; ?>
 
+      <!-- Liens de pagination (Précédent / numéros / Suivant). -->
       <?php require_once '../app/views/templates/partials/_pagination.php'; ?>
 
     </div>
 
+    <!-- Colonne latérale : liste des créa'tifs + liste des tags. -->
     <?php require_once '../app/views/templates/partials/_aside.php'; ?>
 
   </div>
@@ -2106,6 +2303,12 @@ if (isset($project)) {
 </file>
 
 <file path="www/app/views/templates/partials/_nav.php">
+<!--
+    Barre de navigation, affichée en haut de toutes les pages.
+    Aucune donnée PHP dynamique ici : uniquement 2 liens statiques,
+    href="" renvoie vers <base href="PUBLIC_BASE_URL"> défini dans _head.php,
+    donc vers la page d'accueil ("/").
+-->
 <!-- Navigation principale du site. -->
 <nav class="navbar navbar-expand-lg navbar-dark fixed-top ct-navbar">
   <div class="container">
@@ -2121,6 +2324,7 @@ if (isset($project)) {
       CREA'TIFS
     </a>
 
+    <!-- Bouton "burger" affiché en mobile pour déplier le menu (géré par Bootstrap/JS). -->
     <button
       class="navbar-toggler"
       type="button"
@@ -2138,14 +2342,14 @@ if (isset($project)) {
 
       <ul class="navbar-nav ml-auto align-items-lg-center">
 
-        <!-- Retour à la liste des projets -->
+        <!-- Retour à la liste des projets (route "/") -->
         <li class="nav-item active">
           <a class="nav-link" href="">
             Les projets
           </a>
         </li>
 
-        <!-- Nouveau projet -->
+        <!-- Lien vers le formulaire d'ajout : route /projects/add/form.html -->
         <li class="nav-item">
           <a
             class="ct-btn ct-btn--primary ct-btn--sm"
@@ -2180,6 +2384,9 @@ if (isset($project)) {
 <file path="www/app/views/templates/partials/_pagination.php">
 <?php
 
+// $page et $totalPages sont calculés par dashboardAction() (page courante
+// et nombre total de pages en fonction du nombre de projets / 10).
+
 /** @var int $page */
 /** @var int $totalPages */
 
@@ -2190,6 +2397,7 @@ if (isset($project)) {
     <ul class="pagination ct-pagination" style="justify-content: center">
 
 
+        <!-- Lien "Précédent", affiché seulement si on n'est pas sur la 1ère page. -->
         <?php if ($page > 1): ?>
 
             <li class="page-item">
@@ -2209,6 +2417,10 @@ if (isset($project)) {
         <?php endif; ?>
 
 
+        <!-- Un numéro de page par page disponible ; la page courante
+             reçoit la classe "active" pour être mise en évidence.
+             Le filtre par tag ($_GET['tag']), s'il est actif, est conservé
+             dans chaque lien pour ne pas le perdre en changeant de page. -->
         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
 
             <li class="page-item <?= $page == $i ? 'active' : '' ?>">
@@ -2228,6 +2440,7 @@ if (isset($project)) {
         <?php endfor; ?>
 
 
+        <!-- Lien "Suivant", affiché seulement s'il reste des pages après la courante. -->
         <?php if ($page < $totalPages): ?>
 
             <li class="page-item">
@@ -2254,12 +2467,15 @@ if (isset($project)) {
 
 <file path="www/app/views/templates/partials/_scripts.php">
 <!-- Bootstrap JavaScript permet notamment de faire fonctionner le menu responsive. -->
+<!-- Chargés en bas de page (juste avant </body>) pour ne pas bloquer l'affichage. -->
   <script src="vendor/jquery/jquery.min.js"></script>
     <script src="vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
 </file>
 
 <file path="www/app/views/templates/partials/_tags.php">
 <?php
+
+// $tags vient de dashboardAction() : tableau de tous les tags disponibles.
 
 /** @var array $tags */
 
@@ -2275,6 +2491,8 @@ if (isset($project)) {
 
         <ul class="ct-tags">
 
+            <!-- Chaque tag est un lien "?tag=id" : lu par dashboardAction()
+                 via $_GET['tag'] pour filtrer la liste des projets. -->
             <?php foreach ($tags as $tag): ?>
 
                 <li>
@@ -2297,6 +2515,13 @@ if (isset($project)) {
 </file>
 
 <file path="www/app/views/templates/default.php">
+<!--
+    Template "squelette" de toutes les pages du site.
+    Il ne contient aucune logique : il assemble simplement les partials
+    (fichiers _xxx.php) dans le bon ordre. C'est le dernier fichier inclus
+    par public/index.php, une fois que le routeur/contrôleur a préparé
+    les variables (ex: $projects, $project...) utilisées par ces partials.
+-->
 <!DOCTYPE html>
 <html lang="fr">
 
@@ -2360,10 +2585,13 @@ try {
 
 // -----------------------------------------------------------------------------
 // Construit l'URL de base du dossier public.
-// Cette constante est utilisée notamment lors des redirections.
+// Cette constante est utilisée notamment lors des redirections
+// (ex: après l'ajout/la modification/la suppression d'un projet)
+// et dans les vues pour générer des liens absolus vers les assets (CSS/JS).
 // -----------------------------------------------------------------------------
 define(
     'PUBLIC_BASE_URL',
+    // Concatène : schéma (http/https) + hôte + dossier courant (public/) + slash final.
     $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . '/'
 );
 </file>
@@ -2371,22 +2599,37 @@ define(
 <file path="www/core/helpers.php">
 <?php
 
+// -----------------------------------------------------------------------------
+// Fonctions utilitaires (helpers) partagées par toute l'application :
+// - slugify() : construit des URLs "propres" à partir d'un titre.
+// - truncate() : raccourcit un texte pour les aperçus (page d'accueil, etc.).
+// Ces fonctions sont chargées une seule fois par core/init.php.
+// -----------------------------------------------------------------------------
+
 /**
  * Transforme une chaîne de caractères en slug.
+ * Un slug est la partie "lisible" d'une URL (ex: "mon-super-titre"),
+ * utilisée ici dans les liens /projets/id/slug.html pour rendre les URLs
+ * plus explicites (le "slug" n'existe pas en base, il est recalculé à la volée).
  *
  * @param string $texte
  * @return string
  */
 function slugify(string $texte): string
 {
+    // Etape 1 : tout passer en minuscules.
     $texte = strtolower($texte);
 
+    // Etape 2 : remplacer les lettres accentuées par leur équivalent sans accent
+    // (é/è/ê -> e, à/â -> a, ç -> c) pour éviter les soucis d'encodage dans l'URL.
     $texte = str_replace(
         ['é', 'è', 'ê', 'à', 'ç', 'â'],
         ['e', 'e', 'e', 'a', 'c', 'a'],
         $texte
     );
 
+    // Etape 3 : remplacer les espaces et la ponctuation par des tirets,
+    // qui sont le séparateur habituel dans une URL lisible.
     $texte = str_replace(
         [' ', '.', '!', '?', "'", ';', ','],
         '-',
@@ -2394,9 +2637,11 @@ function slugify(string $texte): string
     );
 
     // Remplace plusieurs tirets consécutifs par un seul
+    // (ex: "salut !!" donnerait sinon "salut--" au lieu de "salut-")
     $texte = preg_replace('/-+/', '-', $texte);
 
     // Supprime les tirets au début et à la fin
+    // (au cas où le titre commence/finit par un espace ou un signe de ponctuation)
     $texte = trim($texte, '-');
 
     return $texte;
@@ -2406,31 +2651,46 @@ function slugify(string $texte): string
 /**
  * Tronque une chaîne au niveau de l'espace
  * situé avant le nombre de caractères demandé.
+ * Utilisée pour afficher un aperçu court du texte d'un projet
+ * (ex: 100 caractères max sur la page d'accueil) sans couper un mot en deux.
  *
- * @param string $texte
- * @param int $x
+ * @param string $texte Le texte complet à raccourcir.
+ * @param int $x Le nombre maximum de caractères autorisés.
  * @return string
  */
 function truncate(string $texte, int $x): string
 {
+    // Si le texte est déjà assez court, on le renvoie tel quel (rien à couper).
     if (strlen($texte) <= $x) {
         return $texte;
     }
 
+    // On coupe brutalement à x caractères (ça peut tomber au milieu d'un mot).
     $texte = substr($texte, 0, $x);
 
+    // On cherche le dernier espace avant cette coupure,
+    // afin de ne pas afficher un mot tronqué.
     $position = strrpos($texte, ' ');
 
     if ($position !== false) {
+        // On recoupe juste avant cet espace pour garder des mots entiers.
         $texte = substr($texte, 0, $position);
     }
 
+    // On ajoute "..." pour indiquer que le texte a été raccourci.
     return $texte . '...';
 }
 </file>
 
 <file path="www/core/init.php">
 <?php
+
+// -----------------------------------------------------------------------------
+// Fichier d'amorçage (bootstrap) de l'application.
+// Il regroupe, dans le bon ordre, tout ce dont l'application a besoin
+// avant de pouvoir router une requête et afficher une vue.
+// Ce fichier est inclus en tout premier par public/index.php.
+// -----------------------------------------------------------------------------
 
 // Démarre la session PHP afin de pouvoir utiliser $_SESSION dans l'application.
 session_start();
@@ -84517,18 +84777,39 @@ RewriteRule ^ index.php [END]
 <?php
 
 // -----------------------------------------------------------------------------
-// Point d'entrée unique de l'application.
+// Point d'entrée unique de l'application (front controller).
+// C'est le fichier .htaccess (mod_rewrite) qui redirige toutes les URLs
+// "propres" (ex: /projets/1/mon-titre.html) vers ce fichier, en les
+// transformant en paramètres GET (ex: index.php?projects=show&id=1).
 // Toutes les requêtes qui arrivent dans /public passent par ce fichier.
 // -----------------------------------------------------------------------------
 
-// Charge la configuration, la connexion MySQL et les helpers.
+// Étape 1 : Charge la configuration, la connexion MySQL et les helpers.
 require_once '../core/init.php';
 
-// Analyse l'URL demandée et appelle le routeur correspondant.
+// Étape 2 : Analyse l'URL demandée (via $_GET) et exécute le contrôleur
+// correspondant, qui va préparer les données nécessaires à l'affichage
+// (ex: $projects, $project, $auteurs...) sous forme de variables globales.
 require_once '../app/routers/index.php';
 
-// Affiche le template général contenant les différents partials.
+// Étape 3 : Affiche le template général, qui assemble les partials
+// (head, nav, header, main, footer...) et utilise les variables
+// préparées à l'étape précédente pour construire la page HTML finale.
 require_once '../app/views/templates/default.php';
+</file>
+
+<file path="README.md">
+# CREA_TIFS
+</file>
+
+<file path=".gitignore">
+# Configuration contenant des identifiants sensibles
+/www/app/config/params.php
+
+# Fichiers système
+.DS_Store
+
+repomix-output.xml
 </file>
 
 </files>
