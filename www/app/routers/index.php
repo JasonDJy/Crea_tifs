@@ -1,24 +1,34 @@
-
 <?php
 
 // -----------------------------------------------------------------------------
-// Dispatcher principal.
-// N'analyse plus les routes lui-même : il délègue à des routeurs spécialisés
-// (un par ressource), chacun renvoyant true s'il a pris en charge la requête.
+// Dispatcher principal : délègue à un routeur spécialisé par ressource.
 // -----------------------------------------------------------------------------
 
-// Charge les fonctions routeAuthors() et routeProjects() définies plus bas.
-include_once '../app/routers/authorsRouter.php';
-include_once '../app/routers/projectsRouter.php';
+// ROUTES CREATIFS
+// URL: ?creatifs=xxx
+// ROUTER: creatifs
+if (isset($_GET['creatifs'])):
+    include_once '../app/routers/creatifs.php';
 
-// $connexion vient de core/connexion.php (chargé par core/init.php) ;
-// on le transmet à chaque routeur pour qu'il puisse interroger la BDD.
+// ROUTES TAGS
+// URL: ?tags=xxx
+// ROUTER: tags
+elseif (isset($_GET['tags'])):
+    include_once '../app/routers/tags.php';
 
-// On teste d'abord la route "créa'tif" (valeur dédiée de $_GET['projects']).
-// Si elle correspond, le contrôleur a déjà été exécuté : on arrête ici.
-if (routeAuthors($connexion)) {
-    return;
-}
+// ROUTES PROJECTS
+// URL: ?projects=xxx
+// ROUTER: projects
+elseif (isset($_GET['projects'])):
+    include_once '../app/routers/projects.php';
 
-// Sinon, on tente les routes "projets" (accueil, détail, ajout, modif, suppression).
-routeProjects($connexion);
+else:
+    // ROUTE PAR DÉFAUT: LISTE DES PROJETS
+    // PATTERN: /
+    // URL: ?
+    // CTRL: projectsController
+    // ACTION: index
+
+    include_once '../app/controllers/projectsController.php';
+    \App\Controllers\ProjectsController\indexAction($connexion);
+endif;

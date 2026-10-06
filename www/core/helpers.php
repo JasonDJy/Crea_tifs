@@ -1,84 +1,116 @@
-
 <?php
 
+namespace Core\Helpers;
+
 // -----------------------------------------------------------------------------
-// Fonctions utilitaires (helpers) partagées par toute l'application :
-// - slugify() : construit des URLs "propres" à partir d'un titre.
-// - truncate() : raccourcit un texte pour les aperçus (page d'accueil, etc.).
-// Ces fonctions sont chargées une seule fois par core/init.php.
+// Fonctions utilitaires partagées par toute l'application.
+// Utilisation : `use \Core\Helpers;` puis `Helpers\slugify(...)`.
 // -----------------------------------------------------------------------------
 
 /**
- * Transforme une chaîne de caractères en slug.
- * Un slug est la partie "lisible" d'une URL (ex: "mon-super-titre"),
- * utilisée ici dans les liens /projets/id/slug.html pour rendre les URLs
- * plus explicites (le "slug" n'existe pas en base, il est recalculé à la volée).
+ * Transforme une chaîne en slug (partie lisible d'une URL).
+ * Le slug n'existe pas en base : il est recalculé à la volée.
+ * Ex : "Frange Kamikaze !" => "frange-kamikaze"
  *
- * @param string $texte
- * @return string
+ * Étapes : minuscules, suppression des accents (é è ê à ç â ...), puis
+ * remplacement de tout ce qui n'est pas une lettre/un chiffre (' ', '.', '!',
+ * '?', ''', ';' ...) par un tiret.
  */
 function slugify(string $texte): string
 {
-    // Etape 1 : tout passer en minuscules.
-    $texte = strtolower($texte);
+    $texte = mb_strtolower($texte, 'UTF-8');
 
-    // Etape 2 : remplacer les lettres accentuées par leur équivalent sans accent
-    // (é/è/ê -> e, à/â -> a, ç -> c) pour éviter les soucis d'encodage dans l'URL.
-    $texte = str_replace(
-        ['é', 'è', 'ê', 'à', 'ç', 'â'],
-        ['e', 'e', 'e', 'a', 'c', 'a'],
-        $texte
-    );
+    $texte = strtr($texte, [
+        'é' => 'e', 'è' => 'e', 'ê' => 'e', 'ë' => 'e',
+        'à' => 'a', 'â' => 'a', 'ä' => 'a',
+        'î' => 'i', 'ï' => 'i',
+        'ô' => 'o', 'ö' => 'o',
+        'ù' => 'u', 'û' => 'u', 'ü' => 'u',
+        'ç' => 'c'
+    ]);
 
-    // Etape 3 : remplacer les espaces et la ponctuation par des tirets,
-    // qui sont le séparateur habituel dans une URL lisible.
-    $texte = str_replace(
-        [' ', '.', '!', '?', "'", ';', ','],
-        '-',
-        $texte
-    );
-
-    // Remplace plusieurs tirets consécutifs par un seul
-    // (ex: "salut !!" donnerait sinon "salut--" au lieu de "salut-")
-    $texte = preg_replace('/-+/', '-', $texte);
-
-    // Supprime les tirets au début et à la fin
-    // (au cas où le titre commence/finit par un espace ou un signe de ponctuation)
+    // Plusieurs caractères spéciaux consécutifs donnent un seul tiret.
+    $texte = preg_replace('/[^a-z0-9]+/', '-', $texte);
     $texte = trim($texte, '-');
 
-    return $texte;
+    // Une URL ne peut pas avoir un slug vide (ex: titre "!!!").
+    return $texte === '' ? 'sans-titre' : $texte;
 }
 
-
 /**
- * Tronque une chaîne au niveau de l'espace
- * situé avant le nombre de caractères demandé.
- * Utilisée pour afficher un aperçu court du texte d'un projet
- * (ex: 100 caractères max sur la page d'accueil) sans couper un mot en deux.
- *
- * @param string $texte Le texte complet à raccourcir.
- * @param int $x Le nombre maximum de caractères autorisés.
- * @return string
+ * Coupe un texte à l'espace situé juste avant le $x-ème caractère
+ * (pour ne pas couper un mot en deux) et ajoute "...".
+ * Les fonctions mb_* évitent de couper un caractère accentué en deux.
  */
 function truncate(string $texte, int $x): string
 {
-    // Si le texte est déjà assez court, on le renvoie tel quel (rien à couper).
-    if (strlen($texte) <= $x) {
+    if (mb_strlen($texte) <= $x) {
         return $texte;
     }
 
-    // On coupe brutalement à x caractères (ça peut tomber au milieu d'un mot).
-    $texte = substr($texte, 0, $x);
-
-    // On cherche le dernier espace avant cette coupure,
-    // afin de ne pas afficher un mot tronqué.
-    $position = strrpos($texte, ' ');
+    $texte = mb_substr($texte, 0, $x);
+    $position = mb_strrpos($texte, ' ');
 
     if ($position !== false) {
-        // On recoupe juste avant cet espace pour garder des mots entiers.
-        $texte = substr($texte, 0, $position);
+        $texte = mb_substr($texte, 0, $position);
     }
 
-    // On ajoute "..." pour indiquer que le texte a été raccourci.
     return $texte . '...';
+}
+
+/**
+ * Formate une date SQL (ex: 2018-07-18 00:00:00) pour l'affichage.
+ */
+function dateFormator(string $date, string $format = 'd/m/Y'): string
+{
+    return date($format, strtotime($date));
+}
+
+/**
+ * Protège l'affichage d'une donnée dans le HTML (contre les failles XSS).
+ */
+function escape(?string $texte): string
+{
+    return htmlspecialchars((string) $texte, ENT_QUOTES, 'UTF-8');
+}
+
+/**
+ * Numéro de la page demandée dans l'URL (?page=2). Minimum 1.
+ */
+function currentPage(): int
+{
+    $page = (int) ($_GET['page'] ?? 1);
+
+    return $page < 1 ? 1 : $page;
+}
+
+/**
+ * Enregistre une image envoyée par formulaire dans public/images.
+ * Le fichier est renommé (slug + identifiant unique) pour éviter d'écraser
+ * une image existante ; l'extension doit faire partie de la liste autorisée.
+ *
+ * @param array $fichier Un élément de $_FILES (ex: $_FILES['image'])
+ * @return string|null Le nom du fichier enregistré, null en cas d'échec
+ */
+function uploadImage(array $fichier): ?string
+{
+    if (($fichier['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        return null;
+    }
+
+    $extension = strtolower(pathinfo($fichier['name'], PATHINFO_EXTENSION));
+
+    if (!in_array($extension, IMAGES_ALLOWED_EXTENSIONS, true)) {
+        return null;
+    }
+
+    // Colonne `image` = varchar(45) : slug limité à 20 caractères + uniqid (13) + extension.
+    $nom = mb_substr(slugify(pathinfo($fichier['name'], PATHINFO_FILENAME)), 0, 20)
+        . '-' . uniqid() . '.' . $extension;
+
+    if (!move_uploaded_file($fichier['tmp_name'], IMAGES_DIR . $nom)) {
+        return null;
+    }
+
+    return $nom;
 }

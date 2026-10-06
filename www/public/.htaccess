@@ -3,81 +3,61 @@ RewriteEngine On
 # Désactive MultiViews qui peut interférer avec les URLs sans extension réelle
 Options -MultiViews
 
-
-# -----------------------------------------------------------------------------
-# FICHIERS ET DOSSIERS EXISTANTS
-# -----------------------------------------------------------------------------
-
+# --------------------------------------------
+# Fichiers ou dossiers réels (css, js, images...) : servis tels quels
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [END]
 
+# --------------------------------------------
+# RÈGLES DE RÉ-ÉCRITURE
 
-# -----------------------------------------------------------------------------
-# ACCUEIL
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.INDEX (route par défaut)
+# PATTERN: / ou /projects
+# URL: ?projects=index
 RewriteRule ^$ index.php?projects=index [QSA,END]
 RewriteRule ^projects/?$ index.php?projects=index [QSA,END]
 
-
-# -----------------------------------------------------------------------------
-# DETAIL D'UN PROJET
-# /projets/id/slug.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.SHOW
+# PATTERN: /projets/id/slug.html
+# URL: ?projects=show&id=x
 RewriteRule ^projets/([1-9][0-9]*)/([^/]+)\.html$ index.php?projects=show&id=$1 [QSA,END]
 
-# -----------------------------------------------------------------------------
-# DETAIL D'UN CREATIFS
-# /projets/id/slug.html
-# -----------------------------------------------------------------------------
-
-RewriteRule ^creatifs/([1-9][0-9]*)\.html$ index.php?projects=author&id=$1 [QSA,END]
-
-
-# -----------------------------------------------------------------------------
-# SUPPRESSION
-# /projets/delete/id/slug.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.DELETE
+# PATTERN: /projets/delete/id/slug.html
+# URL: ?projects=delete&id=x
 RewriteRule ^projets/delete/([1-9][0-9]*)/([^/]+)\.html$ index.php?projects=delete&id=$1 [QSA,END]
 
-
-# -----------------------------------------------------------------------------
-# AJOUT - FORMULAIRE
-# /projects/add/form.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.ADD-FORM
+# PATTERN: /projects/add/form.html
+# URL: ?projects=add-form
 RewriteRule ^projects/add/form\.html$ index.php?projects=add-form [QSA,END]
 
-
-# -----------------------------------------------------------------------------
-# AJOUT - INSERTION
-# /projects/add/insert.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.ADD-INSERT
+# PATTERN: /projects/add/insert.html
+# URL: ?projects=add-insert
 RewriteRule ^projects/add/insert\.html$ index.php?projects=add-insert [QSA,END]
 
-
-# -----------------------------------------------------------------------------
-# MODIFICATION - FORMULAIRE
-# /projects/id/slug/edit/form.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.EDIT-FORM
+# PATTERN: /projects/id/slug/edit/form.html
+# URL: ?projects=edit-form&id=x
 RewriteRule ^projects/([1-9][0-9]*)/([^/]+)/edit/form\.html$ index.php?projects=edit-form&id=$1 [QSA,END]
 
-
-# -----------------------------------------------------------------------------
-# MODIFICATION - UPDATE
-# /projects/id/slug/edit/update.html
-# -----------------------------------------------------------------------------
-
+# ROUTE PROJECTS.EDIT-UPDATE
+# PATTERN: /projects/id/slug/edit/update.html
+# URL: ?projects=edit-update&id=x
 RewriteRule ^projects/([1-9][0-9]*)/([^/]+)/edit/update\.html$ index.php?projects=edit-update&id=$1 [QSA,END]
 
+# ROUTE CREATIFS.SHOW
+# PATTERN: /creatifs/id.html
+# URL: ?creatifs=show&id=x
+RewriteRule ^creatifs/([1-9][0-9]*)\.html$ index.php?creatifs=show&id=$1 [QSA,END]
 
-# -----------------------------------------------------------------------------
-# FALLBACK
-# -----------------------------------------------------------------------------
+# ROUTE TAGS.SHOW (projets d'un tag, paginés via ?page=x)
+# PATTERN: /tags/id/slug.html
+# URL: ?tags=show&id=x
+RewriteRule ^tags/([1-9][0-9]*)/([^/]+)\.html$ index.php?tags=show&id=$1 [QSA,END]
 
+# --------------------------------------------
+# FALLBACK : toute autre URL part vers le front controller (route par défaut)
 RewriteRule ^ index.php [END]

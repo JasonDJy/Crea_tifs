@@ -2,86 +2,75 @@
 
 namespace App\Models\TagsModel;
 
-// -----------------------------------------------------------------------------
-// Modèle "Tags" : requêtes SQL liées à la table `tags` et au filtrage
-// des projets par tag (via la table de liaison `projets_has_tags`).
-// -----------------------------------------------------------------------------
-
 use \PDO;
 
+// Modèle "Tags" : requêtes SQL sur la table `tags` et sur la table
+// de liaison `projets_has_tags` (association projet <-> tag).
 
-/*
-|--------------------------------------------------------------------------
-| Récupère tous les tags
-|--------------------------------------------------------------------------
-*/
-
-function getTags(PDO $connexion)
+/**
+ * Récupère tous les tags (sidebar, cases à cocher des formulaires).
+ */
+function findAll(PDO $connexion): array
 {
-    // Liste complète des tags, utilisée dans la sidebar (filtre) et
-    // dans les formulaires d'ajout/modification (cases à cocher).
-    $sql = "SELECT * FROM tags";
-
-    $stmt = $connexion->prepare($sql);
-    $stmt->execute();
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $sql = "SELECT *
+            FROM tags;";
+    $rs = $connexion->prepare($sql);
+    $rs->execute();
+    return $rs->fetchAll(PDO::FETCH_ASSOC);
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Récupère les projets associés à un tag
-|--------------------------------------------------------------------------
-*/
-
-function getProjectsByTag(PDO $connexion, int $tagId, int $page = 1)
+/**
+ * Récupère un tag par son id (null s'il n'existe pas).
+ */
+function findOneById(PDO $connexion, int $id): ?array
 {
-    // Même logique de pagination que ProjectsModel\getProjects(),
-    // mais restreinte aux projets liés à un tag précis (double INNER JOIN :
-    // un pour récupérer le pseudo du créa'tif, un pour filtrer par tag).
-    $limit = 10;
-    $offset = ($page - 1) * $limit;
+    $sql = "SELECT *
+            FROM tags
+            WHERE id = :id;";
+    $rs = $connexion->prepare($sql);
+    $rs->bindValue(':id', $id, PDO::PARAM_INT);
+    $rs->execute();
+    return $rs->fetch(PDO::FETCH_ASSOC) ?: null;
+}
 
-    $sql = "SELECT projets.*, creatifs.pseudo
-            FROM projets
-            INNER JOIN creatifs
-                ON projets.creatif = creatifs.id
+/**
+ * Récupère les tags associés à un projet (via la table de liaison).
+ */
+function findAllByProjectId(PDO $connexion, int $projectId): array
+{
+    $sql = "SELECT tags.*
+            FROM tags
             INNER JOIN projets_has_tags
-                ON projets.id = projets_has_tags.projet
-            WHERE projets_has_tags.tag = :tag
-            ORDER BY projets.id ASC
-            LIMIT $limit OFFSET $offset";
-
-    $stmt = $connexion->prepare($sql);
-
-    $stmt->execute([
-        'tag' => $tagId
-    ]);
-
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+                ON tags.id = projets_has_tags.tag
+            WHERE projets_has_tags.projet = :projet;";
+    $rs = $connexion->prepare($sql);
+    $rs->bindValue(':projet', $projectId, PDO::PARAM_INT);
+    $rs->execute();
+    return $rs->fetchAll(PDO::FETCH_ASSOC);
 }
 
-
-/*
-|--------------------------------------------------------------------------
-| Compte les projets associés à un tag
-|--------------------------------------------------------------------------
-*/
-
-function countProjectsByTag(PDO $connexion, int $tagId)
+/**
+ * Associe un tag à un projet.
+ */
+function insertProjectTag(PDO $connexion, int $projectId, int $tagId): void
 {
-    // Compte directement dans la table de liaison : un projet compte une fois
-    // par tag auquel il est associé (pas besoin de rejoindre `projets` ici).
-    $sql = "SELECT COUNT(*)
-            FROM projets_has_tags
-            WHERE tag = :tag";
+    $sql = "INSERT INTO projets_has_tags (projet, tag)
+            VALUES (:projet, :tag);";
+    $rs = $connexion->prepare($sql);
+    $rs->bindValue(':projet', $projectId, PDO::PARAM_INT);
+    $rs->bindValue(':tag', $tagId, PDO::PARAM_INT);
+    $rs->execute();
+}
 
-    $stmt = $connexion->prepare($sql);
-
-    $stmt->execute([
-        'tag' => $tagId
-    ]);
-
-    return $stmt->fetchColumn();
+/**
+ * Supprime toutes les associations d'un projet avec ses tags
+ * (les tags et le projet restent intacts). Sert de "reset" avant une modification.
+ */
+function deleteProjectTags(PDO $connexion, int $projectId): void
+{
+    $sql = "DELETE FROM projets_has_tags
+            WHERE projet = :projet;";
+    $rs = $connexion->prepare($sql);
+    $rs->bindValue(':projet', $projectId, PDO::PARAM_INT);
+    $rs->execute();
 }

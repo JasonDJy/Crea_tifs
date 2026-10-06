@@ -1,14 +1,20 @@
+<?php
 
+/** @var PDO $connexion Disponible ici car ce partial est inclus depuis une vue elle-même incluse par un contrôleur */
+
+use \App\Controllers\CreatifsController;
+use \App\Controllers\TagsController;
+?>
 <!--
-    Colonne latérale (sidebar) de la page d'accueil : regroupe elle-même
-    deux partials, un par bloc de contenu, pour rester simple à maintenir.
+    Colonne latérale (sidebar) : deux zones dynamiques, chacune alimentée
+    par l'action "indexAside" de son contrôleur.
 -->
 <div class="col-lg-4">
 
-    <!-- Liste des créa'tifs avec accès à leur page. -->
-    <?php require_once '../app/views/templates/partials/_auteurs.php'; ?>
+    <!-- Créa'tifs (CreatifsController\indexAsideAction) -->
+    <?php CreatifsController\indexAsideAction($connexion); ?>
 
-    <!-- Liste des tags permettant de filtrer les projets. -->
-    <?php require_once '../app/views/templates/partials/_tags.php'; ?>
+    <!-- Tags (TagsController\indexAsideAction) -->
+    <?php TagsController\indexAsideAction($connexion); ?>
 
 </div>

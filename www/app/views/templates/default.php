@@ -1,17 +1,14 @@
-
 <!--
-    Template "squelette" de toutes les pages du site.
-    Il ne contient aucune logique : il assemble simplement les partials
-    (fichiers _xxx.php) dans le bon ordre. C'est le dernier fichier inclus
-    par public/index.php, une fois que le routeur/contrôleur a préparé
-    les variables (ex: $projects, $project...) utilisées par ces partials.
+    Template "squelette" de toutes les pages : aucune logique, il assemble
+    les partials. Zones dynamiques : $title (dans _head.php) et $content
+    (dans _main.php), préparées par le contrôleur appelé par le routeur.
 -->
 <!DOCTYPE html>
 <html lang="fr">
 
 <head>
 
-    <!-- Informations et feuilles de style. -->
+    <!-- Métadonnées, titre et feuilles de style. -->
     <?php include '../app/views/templates/partials/_head.php'; ?>
 
 </head>
@@ -21,10 +18,10 @@
     <!-- Navigation principale. -->
     <?php include '../app/views/templates/partials/_nav.php'; ?>
 
-    <!-- En-tête du site. -->
-    <?php include '../app/views/templates/partials/_header.php'; ?>
+    <!-- Bandeau d'en-tête. -->
+    <?php include '../app/views/templates/partials/_hero.php'; ?>
 
-    <!-- Contenu principal de la page. -->
+    <!-- Contenu principal de la page ($content). -->
     <?php include '../app/views/templates/partials/_main.php'; ?>
 
     <!-- Pied de page. -->
